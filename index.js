@@ -1,35 +1,46 @@
-const express = require('express');
+
+// index.js
+
 const http = require('http');
-const { Server } = require('socket.io');
+const express = require('express');
+const { Server: SocketIO } = require('socket.io');
+const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
 
-io.on('connection', (socket) => {
-  console.log('A user connected:', socket.id);
+const io = new SocketIO(server);
+const PORT = process.env.PORT || 8000;
 
-  // Relay the offer to other users
-  socket.on('offer', (offer) => {
-    socket.broadcast.emit('offer', offer); // Send to all connected clients except the sender
-  });
+// Create a users map to keep track of users
+const users = new Map();
 
-  // Relay the answer to the caller
-  socket.on('answer', (answer) => {
-    socket.broadcast.emit('answer', answer);
-  });
+io.on('connection', socket => {
+    console.log(`user connected: ${socket.id}`);
+    users.set(socket.id, socket.id);
 
-  // Relay ICE candidates
-  socket.on('ice-candidate', (candidate) => {
-    socket.broadcast.emit('ice-candidate', candidate);
-  });
+    // emit that a new user has joined as soon as someone joins
+    socket.emit('user:joined', socket.id);
 
-  socket.on('disconnect', () => {
-    console.log('A user disconnected:', socket.id);
-  });
+    socket.on('outgoing:call', data => {
+        const { fromOffer, to } = data;
+
+        socket.to(to).emit('incomming:call', { from: socket.id, offer: fromOffer });
+    });
+
+    socket.on('call:accepted', data => {
+        const { answere, to } = data;
+        socket.to(to).emit('incomming:call', { from: socket.id, offer: answere })
+    });
+
+
+    socket.on('disconnect', () => {
+        console.log(`user disconnected: ${socket.id}`);
+        users.delete(socket.id);
+    });
 });
 
-const PORT = 3000;
-server.listen(PORT, () => {
-  console.log(`Signaling server is running on http://localhost:${PORT}`);
-});
+
+app.use(express.static( path.resolve('./public') ));
+
+server.listen(PORT, () => console.log(`Server started at PORT:${PORT}`));
