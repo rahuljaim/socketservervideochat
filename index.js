@@ -1,4 +1,3 @@
-
 // index.js
 
 const http = require('http');
@@ -20,7 +19,8 @@ io.on('connection', socket => {
     users.set(socket.id, socket.id);
 
     // emit that a new user has joined as soon as someone joins
-    socket.emit('user:joined', socket.id);
+    socket.broadcast.emit('users:joined', socket.id);
+    socket.emit('hello', { id: socket.id });
 
     socket.on('outgoing:call', data => {
         const { fromOffer, to } = data;
@@ -30,17 +30,22 @@ io.on('connection', socket => {
 
     socket.on('call:accepted', data => {
         const { answere, to } = data;
-        socket.to(to).emit('incomming:call', { from: socket.id, offer: answere })
+        socket.to(to).emit('incomming:answere', { from: socket.id, offer: answere })
     });
 
 
     socket.on('disconnect', () => {
         console.log(`user disconnected: ${socket.id}`);
         users.delete(socket.id);
+        socket.broadcast.emit('user:disconnect', socket.id);
     });
 });
 
 
 app.use(express.static( path.resolve('./public') ));
+
+app.get('/users', (req, res) => {
+    return res.json(Array.from(users));
+});
 
 server.listen(PORT, () => console.log(`Server started at PORT:${PORT}`));
